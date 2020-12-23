@@ -12,12 +12,13 @@ class MidiWriter {
   ///
   /// [running] reuse previous eventTypeByte when possible, to compress file
   /// [useByte9ForNoteOff] use 0x09 for noteOff when velocity is zero
-  List<int> writeMidiToBuffer(MidiFile file,
-      {bool running = false, bool useByte9ForNoteOff = false}) {
+  List<int> writeMidiToBuffer(MidiFile file, {bool running = false, bool useByte9ForNoteOff = false}) {
     var w = new ByteWriter();
     writeHeader(w, file.header, file.tracks.length);
 
-    file.tracks.forEach((f) => writeTrack(w, f));
+    file.tracks.forEach((f) {
+      writeTrack(w, f);
+    });
 
     return w.buffer;
   }
@@ -26,15 +27,13 @@ class MidiWriter {
   ///
   /// [running] reuse previous eventTypeByte when possible, to compress file
   /// [useByte9ForNoteOff] use 0x09 for noteOff when velocity is zero
-  void writeMidiToFile(MidiFile midiFile, File file,
-      {bool running = false, bool useByte9ForNoteOff = false}) {
+  void writeMidiToFile(MidiFile midiFile, File file, {bool running = false, bool useByte9ForNoteOff = false}) {
     var bytes = this.writeMidiToBuffer(midiFile);
     file.writeAsBytesSync(bytes);
   }
 
   /// Writes a midi track
-  void writeTrack(ByteWriter w, List<MidiEvent> track,
-      {bool running = false, bool useByte9ForNoteOff = false}) {
+  void writeTrack(ByteWriter w, List<MidiEvent> track, {bool running = false, bool useByte9ForNoteOff = false}) {
     var t = new ByteWriter();
     int i, len = track.length;
     int eventTypeByte;
@@ -42,8 +41,7 @@ class MidiWriter {
       // Reuse last eventTypeByte when opts.running is set, or event.running is explicitly set on it.
       // parseMidi will set event.running for each event, so that we can get an exact copy by default.
       // Explicitly set opts.running to false, to override event.running and never reuse last eventTypeByte.
-      if (running == false || !running && !track[i].running)
-        eventTypeByte = null;
+      if (running == false || !running && !track[i].running) eventTypeByte = null;
 
       var event = track[i];
       event.lastEventTypeByte = eventTypeByte;
@@ -64,8 +62,7 @@ class MidiWriter {
     if (header.timeDivision != null) {
       timeDivision = header.timeDivision;
     } else if (header.ticksPerFrame != null && header.framesPerSecond != null) {
-      timeDivision = (-(header.framesPerSecond & 0xFF) << 8) |
-          (header.ticksPerFrame & 0xFF);
+      timeDivision = (-(header.framesPerSecond & 0xFF) << 8) | (header.ticksPerFrame & 0xFF);
     } else if (header.ticksPerBeat != 0) {
       timeDivision = header.ticksPerBeat & 0x7FFF;
     }
