@@ -7,6 +7,7 @@ class ByteReader {
 
   ByteReader(this.buffer);
 
+  /// used to set: metatypeByte, event.channel
   int readUInt8() {
     var result = this.buffer[this.pos];
     this.pos += 1;
@@ -70,6 +71,7 @@ class ByteReader {
     return String.fromCharCodes(bytes);
   }
 
+  /// used to set deltaTime and 'lengt' string variable
   int readVarInt() {
     var result = 0;
     while (!this.eof) {
