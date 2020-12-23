@@ -1,24 +1,117 @@
 import 'dart:math';
 
 import 'package:dart_midi/src/byte_writer.dart';
+import 'package:meta/meta.dart';
 
-abstract class MidiEvent {
-  String type;
+abstract class _EventWriter {
+  int writeEvent(ByteWriter w);
+}
+
+abstract class MidiEvent implements _EventWriter {
+  ///Every `MidiEvent` should have some String type for debugging purposes.
+  final String type;
+  final int eventTypeByte;
+  String get eventTypeByteString => '0x${eventTypeByte?.toRadixString(16)}';
   int deltaTime = 0;
-  bool meta = false;
+
+  //TODO: is it used?
+  final bool meta;
+  //TODO: is set to true by midi_parser.dart
   bool running = false;
 
-  // ByteWriter stuff
+  // This is a writer functionality
+  //TODO: fix this ByteWriter stuff
   int lastEventTypeByte;
+  //TODO: fix this
   bool useByte9ForNoteOff = false;
 
-  int writeEvent(ByteWriter w);
+  //TODO: There is an need a verification if this.running is always used
+  MidiEvent({
+    @required this.eventTypeByte,
+    @required this.deltaTime,
+    this.meta,
+    @required this.type,
+    this.running,
+  }) {
+    assert(this.type != null, 'Event type should not be null');
+    // assert(this.running != null, 'Running flag in event should not be null');
+  }
+}
+
+/// Private class which is an abstraction of `NoteOnEvent` and `NoteOffEvent`.
+/// It differs from other Events by having byte9 variable, which is specific only for this two classes.
+abstract class _EventWithNote extends MidiEvent {
+  bool byte9 = false;
+
+  _EventWithNote({
+    @required int eventTypeByte,
+    @required this.byte9,
+    @required int deltaTime,
+    bool meta,
+    @required bool running,
+    String type,
+  }) : super(
+          eventTypeByte: eventTypeByte,
+          deltaTime: deltaTime,
+          meta: meta,
+          running: running,
+          type: type,
+        );
+}
+
+/// Private class which is an abstraction of `TextEvent`, `CopyrightNoticeEvent`, `LyricsEvent`, `MarkerEvent`, `CuePointEvent`, `InstrumentNameEvent`.
+/// It differs from other Events by having byte9 variable, which is specific only for this classes.
+abstract class _EventWithText extends MidiEvent {
+  String text;
+
+  _EventWithText({
+    @required int eventTypeByte,
+    @required int deltaTime,
+    bool meta,
+    @required bool running,
+    this.text,
+    String type,
+  }) : super(
+          eventTypeByte: eventTypeByte,
+          deltaTime: deltaTime,
+          meta: meta,
+          running: running,
+          type: type,
+        );
+}
+
+/// Private class which is an abstraction of `SequencerSpecificEvent`, `SequencerSpecificEvent`, `SystemExclusiveEvent`, `EndSystemExclusiveEvent`, `UnknownMetaEvent`, ``.
+/// It differs from other Events by having data variable, which is specific only for this classes.
+abstract class _EventWithData extends MidiEvent {
+  List<int> data;
+
+  _EventWithData({
+    @required int eventTypeByte,
+    @required this.data,
+    @required int deltaTime,
+    bool meta,
+    @required bool running,
+    String type,
+  }) : super(
+          eventTypeByte: eventTypeByte,
+          deltaTime: deltaTime,
+          meta: meta,
+          running: running,
+          type: type,
+        );
 }
 
 class SequenceNumberEvent extends MidiEvent {
   int number;
-  bool meta = true;
+  SequenceNumberEvent({int deltaTime, this.number})
+      : super(
+          deltaTime: deltaTime,
+          eventTypeByte: 0xFF << 8 | 0x00,
+          meta: true,
+          type: 'sequenceNumber',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x00);
@@ -29,7 +122,15 @@ class SequenceNumberEvent extends MidiEvent {
 }
 
 class EndOfTrackEvent extends MidiEvent {
-  bool meta = true;
+  EndOfTrackEvent({int deltaTime})
+      : super(
+          deltaTime: deltaTime,
+          eventTypeByte: 0xFF << 16 | 0x2F << 8 | 0x00,
+          meta: true,
+          type: 'endOfTrack',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x2F);
@@ -41,6 +142,21 @@ class EndOfTrackEvent extends MidiEvent {
 class ProgramChangeMidiEvent extends MidiEvent {
   int channel;
   int programNumber;
+
+  ProgramChangeMidiEvent({
+    this.channel,
+    int deltaTime,
+    this.programNumber,
+    bool running,
+  }) : super(
+          deltaTime: deltaTime,
+          eventTypeByte: 0xC0,
+          meta: false,
+          running: running,
+          type: 'programChange',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     var eventTypeByte = 0xC0 | channel;
     if (eventTypeByte != lastEventTypeByte) w.writeUInt8(eventTypeByte);
@@ -50,9 +166,23 @@ class ProgramChangeMidiEvent extends MidiEvent {
 }
 
 class ChannelAfterTouchEvent extends MidiEvent {
-  int channel;
   int amount;
+  int channel;
 
+  ChannelAfterTouchEvent({
+    this.amount,
+    this.channel,
+    int deltaTime,
+    bool running,
+  }) : super(
+          eventTypeByte: 0xD0,
+          deltaTime: deltaTime,
+          meta: false,
+          running: running,
+          type: 'channelAftertouch',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     var eventTypeByte = 0xD0 | channel;
     if (eventTypeByte != lastEventTypeByte) w.writeUInt8(eventTypeByte);
@@ -65,6 +195,20 @@ class PitchBendEvent extends MidiEvent {
   int channel;
   int value;
 
+  PitchBendEvent({
+    this.channel,
+    int deltaTime,
+    bool running,
+    this.value,
+  }) : super(
+          eventTypeByte: 0xE0,
+          deltaTime: deltaTime,
+          meta: false,
+          running: running,
+          type: 'pitchBend',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     var eventTypeByte = 0xE0 | channel;
     if (eventTypeByte != lastEventTypeByte) w.writeUInt8(eventTypeByte);
@@ -78,11 +222,27 @@ class PitchBendEvent extends MidiEvent {
 }
 
 class ControllerEvent extends MidiEvent {
-  int controllerType;
   int channel;
-  int value;
+  int controllerType;
+  //TODO: there is not assignment to this variable, nor reading
   int number;
+  int value;
 
+  ControllerEvent({
+    this.channel,
+    bool running,
+    int deltaTime,
+    this.controllerType,
+    this.value,
+  }) : super(
+          eventTypeByte: 0xB0,
+          deltaTime: deltaTime,
+          meta: false,
+          running: running,
+          type: 'controller',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     var eventTypeByte = 0xB0 | channel;
     if (eventTypeByte != lastEventTypeByte) w.writeUInt8(eventTypeByte);
@@ -92,12 +252,28 @@ class ControllerEvent extends MidiEvent {
   }
 }
 
-class NoteOnEvent extends MidiEvent {
+class NoteOnEvent extends _EventWithNote {
+  int channel;
   int noteNumber;
   int velocity;
-  int channel;
-  bool byte9 = false;
 
+  NoteOnEvent({
+    bool byte9,
+    this.channel,
+    int deltaTime,
+    this.noteNumber,
+    bool running,
+    this.velocity,
+  }) : super(
+          eventTypeByte: 0x90,
+          byte9: byte9,
+          deltaTime: deltaTime,
+          meta: false,
+          running: running,
+          type: 'noteOn',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     var eventTypeByte = 0x90 | channel;
     if (eventTypeByte != lastEventTypeByte) w.writeUInt8(eventTypeByte);
@@ -108,10 +284,25 @@ class NoteOnEvent extends MidiEvent {
 }
 
 class NoteAfterTouchEvent extends MidiEvent {
-  int noteNumber;
   int amount;
   int channel;
+  int noteNumber;
 
+  NoteAfterTouchEvent({
+    this.amount,
+    this.channel,
+    int deltaTime,
+    this.noteNumber,
+    bool running,
+  }) : super(
+          eventTypeByte: 0xA0,
+          deltaTime: deltaTime,
+          running: running,
+          type: 'polyphonic',
+          meta: false,
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     var eventTypeByte = 0xA0 | channel;
     if (eventTypeByte != lastEventTypeByte) w.writeUInt8(eventTypeByte);
@@ -121,20 +312,33 @@ class NoteAfterTouchEvent extends MidiEvent {
   }
 }
 
-class NoteOffEvent extends MidiEvent {
-  int noteNumber;
+class NoteOffEvent extends _EventWithNote {
   int channel;
+  int noteNumber;
   int velocity;
-  bool byte9 = false;
 
+  NoteOffEvent({
+    bool byte9,
+    this.channel,
+    int deltaTime,
+    this.noteNumber,
+    bool running,
+    this.velocity,
+  }) : super(
+          eventTypeByte: 0x80,
+          byte9: byte9,
+          deltaTime: deltaTime,
+          meta: false,
+          running: running,
+          type: 'noteOff',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     // Use 0x90 when opts.useByte9ForNoteOff is set and velocity is zero, or when event.byte9 is explicitly set on it.
     // parseMidi will set event.byte9 for each event, so that we can get an exact copy by default.
     // Explicitly set opts.useByte9ForNoteOff to false, to override event.byte9 and always use 0x80 for noteOff events.
-    var noteByte = ((useByte9ForNoteOff != false && byte9) ||
-            (useByte9ForNoteOff && velocity == 0))
-        ? 0x90
-        : 0x80;
+    var noteByte = ((useByte9ForNoteOff != false && byte9) || (useByte9ForNoteOff && velocity == 0)) ? 0x90 : 0x80;
 
     var eventTypeByte = noteByte | channel;
     if (eventTypeByte != lastEventTypeByte) w.writeUInt8(eventTypeByte);
@@ -144,10 +348,19 @@ class NoteOffEvent extends MidiEvent {
   }
 }
 
-class TextEvent extends MidiEvent {
-  String text;
-  bool meta = true;
+class TextEvent extends _EventWithText {
+  TextEvent({
+    int deltaTime,
+    String text,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x01,
+          deltaTime: deltaTime,
+          meta: true,
+          text: text,
+          type: 'text',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x01);
@@ -157,10 +370,19 @@ class TextEvent extends MidiEvent {
   }
 }
 
-class CopyrightNoticeEvent extends MidiEvent {
-  String text;
-  bool meta = true;
+class CopyrightNoticeEvent extends _EventWithText {
+  CopyrightNoticeEvent({
+    int deltaTime,
+    String text,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x02,
+          deltaTime: deltaTime,
+          meta: true,
+          text: text,
+          type: 'copyrightNotice',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x02);
@@ -170,10 +392,19 @@ class CopyrightNoticeEvent extends MidiEvent {
   }
 }
 
-class LyricsEvent extends MidiEvent {
-  String text;
-  bool meta = true;
+class LyricsEvent extends _EventWithText {
+  LyricsEvent({
+    String text,
+    int deltaTime,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x05,
+          deltaTime: deltaTime,
+          meta: true,
+          text: text,
+          type: 'lyrics',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x05);
@@ -183,10 +414,19 @@ class LyricsEvent extends MidiEvent {
   }
 }
 
-class MarkerEvent extends MidiEvent {
-  String text;
-  bool meta = true;
+class MarkerEvent extends _EventWithText {
+  MarkerEvent({
+    String text,
+    int deltaTime,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x06,
+          deltaTime: deltaTime,
+          meta: true,
+          text: text,
+          type: 'marker',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x06);
@@ -196,10 +436,19 @@ class MarkerEvent extends MidiEvent {
   }
 }
 
-class CuePointEvent extends MidiEvent {
-  String text;
-  bool meta = true;
+class CuePointEvent extends _EventWithText {
+  CuePointEvent({
+    int deltaTime,
+    String text,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x07,
+          deltaTime: deltaTime,
+          meta: true,
+          text: text,
+          type: 'cuePoint',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x07);
@@ -209,10 +458,19 @@ class CuePointEvent extends MidiEvent {
   }
 }
 
-class InstrumentNameEvent extends MidiEvent {
-  String text;
-  bool meta = true;
+class InstrumentNameEvent extends _EventWithText {
+  InstrumentNameEvent({
+    int deltaTime,
+    String text,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x04,
+          deltaTime: deltaTime,
+          meta: true,
+          text: text,
+          type: 'instrumentName',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x04);
@@ -222,10 +480,19 @@ class InstrumentNameEvent extends MidiEvent {
   }
 }
 
-class TrackNameEvent extends MidiEvent {
-  String text;
-  bool meta = true;
+class TrackNameEvent extends _EventWithText {
+  TrackNameEvent({
+    int deltaTime,
+    String text,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x03,
+          deltaTime: deltaTime,
+          meta: true,
+          text: text,
+          type: 'trackName',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x03);
@@ -237,8 +504,18 @@ class TrackNameEvent extends MidiEvent {
 
 class ChannelPrefixEvent extends MidiEvent {
   int channel;
-  bool meta = true;
 
+  ChannelPrefixEvent({
+    this.channel,
+    int deltaTime,
+  }) : super(
+          eventTypeByte: 0xFF << 16 | 0x20 << 8 | 0x01,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'channelPrefix',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x20);
@@ -249,9 +526,21 @@ class ChannelPrefixEvent extends MidiEvent {
 }
 
 class PortPrefixEvent extends MidiEvent {
+  int channel;
+  //TODO: there is no assignment to this variable
   int port;
-  bool meta = true;
 
+  PortPrefixEvent({
+    this.channel,
+    int deltaTime,
+  }) : super(
+          eventTypeByte: 0xFF << 16 | 0x21 << 8 | 0x01,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'portPrefix',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x21);
@@ -263,8 +552,18 @@ class PortPrefixEvent extends MidiEvent {
 
 class SetTempoEvent extends MidiEvent {
   int microsecondsPerBeat;
-  bool meta = true;
 
+  SetTempoEvent({
+    int deltaTime,
+    this.microsecondsPerBeat,
+  }) : super(
+          eventTypeByte: 0xFF << 16 | 0x51 << 8 | 0x03,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'setTempo',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x51);
@@ -274,10 +573,19 @@ class SetTempoEvent extends MidiEvent {
   }
 }
 
-class SequencerSpecificEvent extends MidiEvent {
-  List<int> data;
-  bool meta = true;
+class SequencerSpecificEvent extends _EventWithData {
+  SequencerSpecificEvent({
+    List<int> data,
+    int deltaTime,
+  }) : super(
+          eventTypeByte: 0xFF << 8 | 0x7F,
+          data: data,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'sequencerSpecific',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x7F);
@@ -288,8 +596,19 @@ class SequencerSpecificEvent extends MidiEvent {
   }
 }
 
-class SystemExclusiveEvent extends MidiEvent {
-  List<int> data;
+class SystemExclusiveEvent extends _EventWithData {
+  SystemExclusiveEvent({
+    List<int> data,
+    int deltaTime,
+  }) : super(
+          eventTypeByte: 0xF0,
+          data: data,
+          deltaTime: deltaTime,
+          meta: false,
+          type: 'sysEx',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xF0);
     w.writeVarInt(data.length);
@@ -299,9 +618,19 @@ class SystemExclusiveEvent extends MidiEvent {
   }
 }
 
-class EndSystemExclusiveEvent extends MidiEvent {
-  List<int> data;
+class EndSystemExclusiveEvent extends _EventWithData {
+  EndSystemExclusiveEvent({
+    List<int> data,
+    int deltaTime,
+  }) : super(
+          eventTypeByte: 0xF7,
+          data: data,
+          deltaTime: deltaTime,
+          meta: false,
+          type: 'endSysEx',
+        );
 
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xF7);
     w.writeVarInt(data.length);
@@ -310,12 +639,22 @@ class EndSystemExclusiveEvent extends MidiEvent {
   }
 }
 
-class UnknownMetaEvent extends MidiEvent {
-  bool meta = true;
-
-  List<int> data;
+class UnknownMetaEvent extends _EventWithData {
   int metatypeByte;
 
+  UnknownMetaEvent({
+    List<int> data,
+    int deltaTime,
+    this.metatypeByte,
+  }) : super(
+          eventTypeByte: 0xFF,
+          data: data,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'unknownMeta',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     if (metatypeByte != null) {
       w.writeUInt8(0xFF);
@@ -323,20 +662,34 @@ class UnknownMetaEvent extends MidiEvent {
       w.writeVarInt(data.length);
       w.writeBytes(data);
     }
-
     return -1;
   }
 }
 
 class SmpteOffsetEvent extends MidiEvent {
-  bool meta = true;
-
+  int frame;
   int frameRate;
   int hour;
   int min;
   int sec;
-  int frame;
   int subFrame;
+
+  SmpteOffsetEvent({
+    int deltaTime,
+    this.frame,
+    this.frameRate,
+    this.hour,
+    this.min,
+    this.sec,
+    this.subFrame,
+  }) : super(
+          eventTypeByte: 0xFF << 16 | 0x54 << 8 | 0x05,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'smpteOffset',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x54);
@@ -353,13 +706,25 @@ class SmpteOffsetEvent extends MidiEvent {
 }
 
 class TimeSignatureEvent extends MidiEvent {
-  bool meta = true;
-
-  int numerator;
   int denominator;
   int metronome;
+  int numerator;
   int thirtyseconds;
 
+  TimeSignatureEvent({
+    int deltaTime,
+    this.denominator,
+    this.metronome,
+    this.numerator,
+    this.thirtyseconds,
+  }) : super(
+          eventTypeByte: 0xFF << 16 | 0x58 << 8 | 0x04,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'timeSignature',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x58);
@@ -376,8 +741,19 @@ class TimeSignatureEvent extends MidiEvent {
 class KeySignatureEvent extends MidiEvent {
   int key;
   int scale;
-  bool meta = true;
 
+  KeySignatureEvent({
+    int deltaTime,
+    this.key,
+    this.scale,
+  }) : super(
+          eventTypeByte: 0xFF << 16 | 0x59 << 8 | 0x02,
+          deltaTime: deltaTime,
+          meta: true,
+          type: 'keySignature',
+        );
+
+  @override
   int writeEvent(ByteWriter w) {
     w.writeUInt8(0xFF);
     w.writeUInt8(0x59);
