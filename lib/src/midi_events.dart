@@ -25,12 +25,12 @@ abstract class MidiEvent implements _EventWriter {
   //TODO: fix this
   bool useByte9ForNoteOff = false;
 
-  //TODO: There is an need a verification if this.running is always used
   MidiEvent({
     @required this.eventTypeByte,
     @required this.deltaTime,
     this.meta,
     @required this.type,
+    //TODO: There is an need a verification if this.running is always used
     this.running,
   }) {
     assert(this.type != null, 'Event type should not be null');

@@ -17,7 +17,7 @@ class MidiParser {
     var p = new ByteReader(buffer);
 
     var headerChunk = p.readChunk();
-    if (headerChunk.id != 'MThd') throw "Bad MIDI file.  Expected 'MHdr', got: '${headerChunk.id}'";
+    if (headerChunk.id != 'MThd') throw "Bad MIDI file.  Expected 'MThd', got: '${headerChunk.id}'";
     var header = parseHeader(headerChunk.bytes);
 
     List<List<MidiEvent>> tracks = [];

@@ -3,12 +3,17 @@ import 'package:dart_midi/src/data_chunk.dart';
 class ByteReader {
   final List<int> buffer;
   int pos = 0;
+
+  @Deprecated('this getter is deprecated')
+  //TODO: refactor this variable
   bool get eof => this.pos >= buffer.length;
 
   ByteReader(this.buffer);
 
-  /// used to set: metatypeByte, event.channel
+  /// used to set: metatypeByte, event.channel.
+  /// Reads one byte with 8 bits of data from the common buffer
   int readUInt8() {
+    //TODO: add exception when try to read index out of scope
     var result = this.buffer[this.pos];
     this.pos += 1;
     return result;
@@ -22,10 +27,11 @@ class ByteReader {
       return u;
   }
 
+  /// Reads two bytes with 8 bits of data from the common buffer
   int readUInt16() {
     var b0 = this.readUInt8();
     var b1 = this.readUInt8();
-    return (b0 << 8) + b1;
+    return b0 << 8 | b1;
   }
 
   int readInt16() {
@@ -36,11 +42,12 @@ class ByteReader {
       return u;
   }
 
+  /// Reads three bytes with 8 bits of data from the common buffer
   int readUInt24() {
     var b0 = this.readUInt8();
     var b1 = this.readUInt8();
     var b2 = this.readUInt8();
-    return (b0 << 16) + (b1 << 8) + b2;
+    return b0 << 16 | b1 << 8 | b2;
   }
 
   int readInt24() {
@@ -51,13 +58,14 @@ class ByteReader {
       return u;
   }
 
+  /// Reads four bytes with 8 bits of data from the common buffer
   int readUInt32() {
     var b0 = this.readUInt8();
     var b1 = this.readUInt8();
     var b2 = this.readUInt8();
     var b3 = this.readUInt8();
 
-    return (b0 << 24) + (b1 << 16) + (b2 << 8) + b3;
+    return b0 << 24 | b1 << 16 | b2 << 8 | b3;
   }
 
   List<int> readBytes(int len) {
@@ -71,7 +79,7 @@ class ByteReader {
     return String.fromCharCodes(bytes);
   }
 
-  /// used to set deltaTime and 'lengt' string variable
+  /// used to set deltaTime and 'lenght' string variable
   int readVarInt() {
     var result = 0;
     while (!this.eof) {
